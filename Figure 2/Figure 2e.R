@@ -2,7 +2,7 @@ library(data.table)
 library(dplyr)
 library(rworldmap)
 library(ggplot2)
-data=read.csv("politics.csv")%>%as.data.table()
+data=read.csv("figure 2.csv")%>%as.data.table()
 data[,birth:=2020-breakeven]
 data[,birth_lag:=2020-breakeven_lag]
 
