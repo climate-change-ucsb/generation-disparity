@@ -1,72 +1,5 @@
 library(openxlsx)
 library(data.table)
-data=read.xlsx("Energy Investment.xlsx")
-
-setDT(data)
-
-Investment=data[(Scenario=="CPol" | Scenario=="2C") & Variable=="Total energy investment",]
-
-ID=Investment[,c(1:3)]
-name=colnames(data[,6:23])
-Investment <- Investment[,lapply(.SD,as.numeric),.SDcols=name]
-Investment <- cbind(ID,Investment)
-
-ID_delta=Investment[Scenario=="2C",c(1:2)]
-delta=Investment[Scenario=="2C",c(4:21)]-Investment[Scenario=="CPol",c(4:21)]
-delta <- cbind(ID_delta,delta)
-
-
-name=colnames(Investment[,4:21])
-
-#median
-Investment_median <- Investment[,lapply(.SD,median),.SDcols=name,by=c("Region","Scenario")]
-Investment_CPol <- Investment_median[Scenario=="CPol"]
-Investment_2C <- Investment_median[Scenario=="2C"]
-
-delta_median <- delta[,lapply(.SD,median),.SDcols=name,by=c("Region")]
-
-
-#Max
-Investment_max <- Investment[,lapply(.SD,max),.SDcols=name,by=c("Region","Scenario")]
-Investment_CPol_max <- Investment_max[Scenario=="CPol"]
-Investment_2C_max <- Investment_max[Scenario=="2C"]
-
-delta_max <- delta[,lapply(.SD,max),.SDcols=name,by=c("Region")]
-
-#Min
-Investment_min <- Investment[,lapply(.SD,min),.SDcols=name,by=c("Region","Scenario")]
-Investment_CPol_min <- Investment_min[Scenario=="CPol"]
-Investment_2C_min <- Investment_min[Scenario=="2C"]
-
-delta_min <- delta[,lapply(.SD,min),.SDcols=name,by=c("Region")]
-
-wb <- createWorkbook()
-addWorksheet(wb, "CPol")
-addWorksheet(wb, "2C")
-addWorksheet(wb,"delta")
-addWorksheet(wb, "CPol_max")
-addWorksheet(wb, "2C_max")
-addWorksheet(wb,"delta_max")
-addWorksheet(wb, "CPol_min")
-addWorksheet(wb, "2C_min")
-addWorksheet(wb,"delta_min")
-writeData(wb,"CPol",Investment_CPol)
-writeData(wb,"2C",Investment_2C)
-writeData(wb,"delta",delta_median)
-
-writeData(wb,"CPol_max",Investment_CPol_max)
-writeData(wb,"2C_max",Investment_2C_max)
-writeData(wb,"delta_max",delta_max)
-
-writeData(wb,"CPol_min",Investment_CPol_min)
-writeData(wb,"2C_min",Investment_2C_min)
-writeData(wb,"delta_min",delta_min)
-
-saveWorkbook(wb, "Investment.xlsx", overwrite = TRUE)
-
-
-
-
 library(countrycode)
 library(stringr)
 
@@ -109,4 +42,5 @@ popyear_age_output=popyear_age[,c("SSP","ISO3","age","year","pop")]
 output=dcast(popyear_age_output,
              SSP+ISO3+age ~ year,
              value.var = c("pop"))
+
 write.csv(output,file="Age structure.csv")
