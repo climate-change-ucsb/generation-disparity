@@ -10,7 +10,7 @@ library(ggpubr)
 
 
 
-map_data=read.csv("politics.csv")%>%as.data.table()
+map_data=read.csv("figure 2.csv")%>%as.data.table()
 map_data[income=="High",breakeven_high:=breakeven]
 map_data[income=="Upper middle",breakeven_upper:=breakeven]
 map_data[income=="Lower middle",breakeven_lower:=breakeven]
