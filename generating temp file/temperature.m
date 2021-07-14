@@ -10,8 +10,8 @@ rcp85=contains(name,'rcp85b');
 
 country=shaperead('gadm28_levels.shp/gadm28_adm0.shp');
 listcountry={country.ISO};
-countryselect=readtable('/Users/haozheyang/Documents/GitHub/cscc-paper-2018-master/BHM_rcp60 _ SSP1 _ .csv');
-select=countryselect.Var2(2:end);
+countryselect=readtable('countryname');
+select=countryselect.ISO3;
 
 listcountry=listcountry';
 
