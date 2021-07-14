@@ -10,7 +10,7 @@ rcp85=contains(name,'rcp85b');
 
 country=shaperead('gadm28_levels.shp/gadm28_adm0.shp');
 listcountry={country.ISO};
-countryselect=readtable('countryname');
+countryselect=readtable('countryname.xlsx');
 select=countryselect.ISO3;
 
 listcountry=listcountry';
