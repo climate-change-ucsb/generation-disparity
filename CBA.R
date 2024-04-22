@@ -4,7 +4,72 @@
 
 library(data.table)
 library(docopt)
+library(openxlsx)
+library(triangle)
+library(dplyr)
+# Future years
+impulse_year = 2020
+fyears <- impulse_year:2100
 
+distribution=read.xlsx("income distribution.xlsx")%>%setDT()
+distribution=melt(distribution,
+                  id.vars=c("ISO3"),
+                  value.name=c("income_ratio"),
+                  variable.name=c("project_age"),
+                  variable.factor=FALSE)
+distribution[,project_age:=as.numeric(project_age)]
+
+region_allocate=read.xlsx("Region.xlsx")
+
+lifeyears=0:100
+
+lifeexpect=setDT(read.xlsx("LifeExpectancy.xlsx",sheet="Data",rows=2:19,cols=5:26));
+lifeexpect=lifeexpect[,lyear:=seq(2020,2100,by=5)]
+setnames(lifeexpect,"100+","100")
+
+lifeexpect=melt(lifeexpect,
+                id.vars=c("lyear"),
+                value.name = c("expectancy"),
+                variable.name = c("age"),
+                variable.factor = FALSE)
+
+lifeexpect2=lifeexpect[,approx(lyear,expectancy,fyears),by=c("age")]
+setnames(lifeexpect2,c("x","y"),c("year","expectancy"))
+
+lifeexpect3=lifeexpect2[,approx(age,expectancy,lifeyears),by=c("year")]
+setnames(lifeexpect3,c("x","y"),c("age","expectancy"))
+
+lifeexpect_country=read.xlsx('Life expectancy at birth.xlsx')
+n <- 9
+
+lifeexpect_country=do.call("rbind", replicate(n, lifeexpect_country, simplify = FALSE))
+setDT(lifeexpect_country)
+base=as.numeric(lifeexpect3[age==0 & year==2020,3])
+lifeexpect_country=lifeexpect_country[,r:=Life/base]
+
+ffyears=seq(2020,2100,by=10)
+lifeexpect_country2=lifeexpect_country[,year:=ffyears,by=c("r")]
+
+life_expectancy=merge(lifeexpect_country2,lifeexpect3,by=c("year"),allow.cartesian = TRUE)
+life_expectancy=life_expectancy[,.(ISO3=ISO,year=year,age=age,expectancy=expectancy*r)]
+life_expectancy=life_expectancy[,start:=max(year-age,2020),by=c("ISO3","year","age")]
+life_expectancy=life_expectancy[,end:=min(year+floor(expectancy),2100),by=c("ISO3","year","age")]
+setnames(life_expectancy,c("year"),c("time"))
+
+project_gap=function(SD){
+  .net=SD$net>0
+  breakeven=sum(.net)-1
+  if (breakeven<0)
+  {
+    breakeven=-10
+  }
+  return(breakeven)
+}
+
+rcpgroup=c("rcp45","rcp60","rcp85")
+sspgroup=c("SSP1","SSP2","SSP3","SSP4","SSP5")
+for (rcpV in rcpgroup){
+  for (sspV in sspgroup){
 'usage: generate_cscc.R -s <ssp> -c <rcp> [ -r <runid> -p <type> -l <clim> -f <name>] [-a] [-o] [-d] [-w]
 
 options:
@@ -19,7 +84,7 @@ options:
  -f <name>  damage function (default=bhm (Burke et al.), djo (Dell et al.))
  -w         save raw data' -> doc
 
-opts <- docopt(doc, "-s SSP4 -c rcp60 -r 1 -l mean -a -w")
+opts <- docopt(doc, "-s SSP4 -c rcp60 -r 1 -l mean -w")
 
 # Some tests
 #opts <- docopt(doc, "-s SSP2 -c rcp60 -w") # Default case
@@ -33,12 +98,12 @@ t0 <- Sys.time()
 if (is.null(opts[["s"]])) {
   ssp = sample(paste0("SSP",1:5),1) # SSP{1,2,3,4,5}
 } else {
-  ssp = as.character(opts["s"])
+  ssp = sspV
 }
 if (is.null(opts[["c"]])) {
   .rcp = sample(c("rcp26","rcp45","rcp60","rcp85"),1)
 } else {
-  .rcp = as.character(opts["c"]) 
+  .rcp = rcpV
 }
 if (is.null(opts[["r"]])) {
   dmg_func = "estimates" # dmg function
@@ -76,8 +141,9 @@ out_of_sample = !opts[['o']]
 rich_poor = opts[['d']]
 lag5 = opts[['a']]
 save_raw_data = opts[['w']]
+
 very_last_year = 2100
-impulse_year = 2020
+
 preffdir = "res"
 dollar_scale = 1e12 # convert to trillion
 reftemplastyear = F
@@ -145,8 +211,6 @@ temp_new=temp_Burke[.rcp]
 rcp26_new=temp_Burke["rcp26"];
 basetemp_new=temp_Burke["basetemp"];
 
-# Future years
-fyears <- impulse_year:2100
 
 
 # Project all scenarios
@@ -185,63 +249,6 @@ project_gdpcap <- function(SD){
 }
 
 
-
-
-library(openxlsx)
-library(triangle)
-
-distribution=read.xlsx("income distribution.xlsx")%>%setDT()
-distribution=melt(distribution,
-                  id.vars=c("ISO3"),
-                  value.name=c("income_ratio"),
-                  variable.name=c("project_age"),
-                  variable.factor=FALSE)
-distribution[,project_age:=as.numeric(project_age)]
-region_allocate=read.xlsx("Region.xlsx")
-
-lifeyears=0:100
-
-lifeexpect=setDT(read.xlsx("LifeExpectancy.xlsx",sheet="Data",rows=2:19,cols=5:26));
-lifeexpect=lifeexpect[,lyear:=seq(2020,2100,by=5)]
-setnames(lifeexpect,"100+","100")
-
-lifeexpect=melt(lifeexpect,
-          id.vars=c("lyear"),
-          value.name = c("expectancy"),
-          variable.name = c("age"),
-          variable.factor = FALSE)
-
-lifeexpect2=lifeexpect[,approx(lyear,expectancy,fyears),by=c("age")]
-setnames(lifeexpect2,c("x","y"),c("year","expectancy"))
-
-lifeexpect3=lifeexpect2[,approx(age,expectancy,lifeyears),by=c("year")]
-setnames(lifeexpect3,c("x","y"),c("age","expectancy"))
-
-lifeexpect_country=read.xlsx('Life expectancy at birth.xlsx')
-n <- 9
-lifeexpect_country=do.call("rbind", replicate(n, lifeexpect_country, simplify = FALSE))
-setDT(lifeexpect_country)
-base=as.numeric(lifeexpect3[age==0 & year==2020,3])
-lifeexpect_country=lifeexpect_country[,r:=Life/base]
-
-ffyears=seq(2020,2100,by=10)
-lifeexpect_country2=lifeexpect_country[,year:=ffyears,by=c("r")]
-
-life_expectancy=merge(lifeexpect_country2,lifeexpect3,by=c("year"),allow.cartesian = TRUE)
-life_expectancy=life_expectancy[,.(ISO3=ISO,year=year,age=age,expectancy=expectancy*r)]
-life_expectancy=life_expectancy[,start:=max(year-age,2020),by=c("ISO3","year","age")]
-life_expectancy=life_expectancy[,end:=min(year+floor(expectancy),2100),by=c("ISO3","year","age")]
-setnames(life_expectancy,c("year"),c("time"))
-
-project_gap=function(SD){
-  .net=SD$net>0
-  breakeven=sum(.net)-1
-  if (breakeven<0)
-  {
-    breakeven=-10
-  }
-  return(breakeven)
-}
 
 
 lcscc = NULL
@@ -346,7 +353,7 @@ for (nid in runid) {
   
   print(Sys.time() - t0)
   
-  # Compute social benefits of climate change mitigation   in million dollar
+  # Compute social benefits of climate change mitigation
   res_scc[, scc := (-gdpcap_cc+gdpcap)  * 1.26*(1e6 / dollar_scale)] # $2005/tCO2  **I delete impulse here to calculate total GDP loss
   res_scc[, cgdp := (gdpcap_cc) *1.26 * (1e6 / dollar_scale)] #GDP under climate change
   res_scc[, mcc := cgdp*mitigation/100*ratio] #mitigation cost of climate change
@@ -358,34 +365,68 @@ for (nid in runid) {
   
   
   
-  prtps = c(3) # When using the fixed discount, set etas=0 
-  etas = c(0) 
+  prtps = c(1,2) # When using the fixed discount, set etas=0 
+  etas = c(2) 
   
-  cscc = NULL
+ 
   cohort_scc=NULL
   cohort_gap=NULL
   for (.prtp in prtps) {
     for (.eta in etas) {
-      dscc = res_scc[,list(ISO3,model_id,year,gdprate_cc_avg,scc,cgdp,mcc)]
+      dscc = res_scc[,list(ISO3,model_id,year,gdprate_cc_avg,scc,mcc)]
       dscc[,dfac := (1/(1 + .prtp/100 + .eta * gdprate_cc_avg)^(year - impulse_year))]
       dscc[,dscc := dfac * scc]
-      dscc[,dcgdp:=dfac*cgdp]
       dscc[,dmcc:=dfac*mcc]
       dscc[,dnet:=dscc-dmcc]
       cohort_scc0=merge(life_expectancy,dscc,by=c("ISO3"),allow.cartesian = TRUE)
+      
+    #  cohort_scc1=cohort_scc0[year>start-1 & year<end+1,
+    #                        .(prtp=.prtp,eta=.eta,benefit=sum(dscc),cost=sum(dmcc),net=sum(dnet)),
+    #                         by=c("model_id","ISO3","time","age")]
       cohort_scc0=cohort_scc0[year>start-1 & year<end+1,]
       cohort_scc0[,project_age:=year-time+age]
       cohort_scc0=merge(cohort_scc0,distribution,by=c("ISO3","project_age"))
-      cohort_scc1=cohort_scc0[,.(prtp=.prtp,eta=.eta,benefit=sum(dscc*income_ratio),cost=sum(dmcc*income_ratio),net=sum(dnet*income_ratio),gdp=sum(dcgdp*income_ratio),cgdp=sum(dnet)/sum(dcgdp*income_ratio)),
-                             by=c("model_id","ISO3","time","age")]
-      #cohort_scc=rbind(cohort_scc,cohort_scc1[time==2020,])
-      cohort_scc=rbind(cohort_scc,cohort_scc1)
+      cohort_scc1=cohort_scc0[,.(prtp=.prtp,eta=.eta,benefit=sum(dscc*income_ratio),cost=sum(dmcc*income_ratio),net=sum(dnet*income_ratio)),
+                              by=c("model_id","ISO3","time","age")]
+      cohort_scc=rbind(cohort_scc,cohort_scc1[time==2020,])
+      
       cohort_gap=rbind(cohort_gap,cohort_scc1[,.(prtp=.prtp,eta=.eta,gap=project_gap(.SD)),by=c("model_id","ISO3","time")])
+     
+      }
+  }
   
-      }
-      }
-
-
+  drs = c(3,5) #%
+  
+  cohort_scc_d=NULL
+  cohort_gap_d=NULL
+ 
+  for (.dr in drs) {
+    dscc = res_scc[,list(ISO3,model_id,year,gdprate_cc_avg,scc,mcc)]
+    dscc[,dfac := (1/(1 + .dr/100 * gdprate_cc_avg)^(year - impulse_year))]
+    dscc[,dscc := dfac * scc]
+    dscc[,dmcc:=dfac*mcc]
+    dscc[,dnet:=dscc-dmcc]
+    cohort_scc0=merge(life_expectancy,dscc,by=c("ISO3"),allow.cartesian = TRUE)
+    
+    cohort_scc0=cohort_scc0[year>start-1 & year<end+1,]
+    cohort_scc0[,project_age:=year-time+age]
+    cohort_scc0=merge(cohort_scc0,distribution,by=c("ISO3","project_age"))
+    cohort_scc1=cohort_scc0[,.(dr=.dr,benefit=sum(dscc*income_ratio),cost=sum(dmcc*income_ratio),net=sum(dnet*income_ratio)),
+                            by=c("model_id","ISO3","time","age")]
+    
+  #  cohort_scc1=cohort_scc0[year>start-1 & year<end+1,
+  #                          .(dr=.dr,benefit=sum(dscc),cost=sum(dmcc),net=sum(dnet)),
+  #                          by=c("model_id","ISO3","time","age")]
+    
+    cohort_scc_d=rbind(cohort_scc_d,cohort_scc1[time==2020,])
+    
+    cohort_gap_d=rbind(cohort_gap_d,cohort_scc1[,.(dr=.dr,gap=project_gap(.SD)),by=c("model_id","ISO3","time")])
+    
+  }
+  
+ cohort_scc = rbindlist(list(cohort_scc_d,cohort_scc),fill = T)
+ cohort_gap = rbindlist(list(cohort_gap_d,cohort_gap),fill = T)
+ 
   print(Sys.time() - t0)
   
   lcohort = rbind(lcohort,cohort_scc)
@@ -393,34 +434,44 @@ for (nid in runid) {
   
 }
 
-result_25=lcohort[,lapply(.SD,quantile, probs = c(0.25)),by=c("ISO3","prtp","eta","age","time"),
-              .SDcols=c("benefit","cost","net","cgdp")]
+result_25=lcohort[,lapply(.SD,quantile, probs = c(0.25)),by=c("ISO3","prtp","eta","dr","age","time"),
+                  .SDcols=c("benefit","cost","net")]
+setnames(result_25,c("benefit","cost","net"),c("benefit_25","cost_25","net_25"))
 
-result_75=lcohort[,lapply(.SD,quantile, probs = c(0.75)),by=c("ISO3","prtp","eta","age","time"),
-                  .SDcols=c("benefit","cost","net","cgdp")]
+result_75=lcohort[,lapply(.SD,quantile, probs = c(0.75)),by=c("ISO3","prtp","eta","dr","age","time"),
+                  .SDcols=c("benefit","cost","net")]
+setnames(result_75,c("benefit","cost","net"),c("benefit_75","cost_75","net_75"))
 
-result_median=lcohort[,lapply(.SD,median),by=c("ISO3","prtp","eta","age","time"),
-                  .SDcols=c("benefit","cost","net","cgdp")]
+result_median=lcohort[,lapply(.SD,median),by=c("ISO3","prtp","eta","dr","age","time"),
+                      .SDcols=c("benefit","cost","net")]
 
+result=merge(result_median,result_25,by=c("ISO3","prtp","eta","dr","age","time"))
 
-gap_25=lcohort_gap[,lapply(.SD,quantile, probs = c(0.25)),by=c("ISO3","prtp","eta","time"),
-                  .SDcols=c("gap")]
-
-gap_75=lcohort_gap[,lapply(.SD,quantile, probs = c(0.75)),by=c("ISO3","prtp","eta","time"),
-                  .SDcols=c("gap")]
-
-gap_median=lcohort_gap[,lapply(.SD,median),by=c("ISO3","prtp","eta","time"),
-                      .SDcols=c("gap")]
-
- write.csv(result_75,file=paste0("lag_confidence_75","_",.rcp,"_",ssp,".csv"))
- write.csv(result_25,file=paste0("lag_confidence_25","_",.rcp,"_",ssp,".csv"))
- write.csv(result_median,file=paste0("lag_median","_",.rcp,"_",ssp,".csv"))
-
- #write.csv(gap_75,file=paste0("gap_confidence_75","_",.rcp,"_",ssp,".csv"))
- #write.csv(gap_25,file=paste0("gap_confidence_25","_",.rcp,"_",ssp,".csv"))
- #write.csv(gap_median,file=paste0("gap_median","_",.rcp,"_",ssp,".csv")) 
+result=merge(result,result_75,by=c("ISO3","prtp","eta","dr","age","time"))
 
 
+gap_25=lcohort_gap[,lapply(.SD,quantile, probs = c(0.25)),by=c("ISO3","prtp","eta","dr","time"),
+                   .SDcols=c("gap")]
+setnames(gap_25,c("gap"),c("gap_25"))
+
+gap_75=lcohort_gap[,lapply(.SD,quantile, probs = c(0.75)),by=c("ISO3","prtp","eta","dr","time"),
+                   .SDcols=c("gap")]
+setnames(gap_75,c("gap"),c("gap_75"))
+
+gap_median=lcohort_gap[,lapply(.SD,median),by=c("ISO3","prtp","eta","dr","time"),
+                       .SDcols=c("gap")]
+gap=merge(gap_median,gap_25,by=c("ISO3","prtp","eta","dr","time"))
+
+gap=merge(gap,gap_75,by=c("ISO3","prtp","eta","dr","time"))
+
+
+
+ write.csv(result,file=paste0("uncertainty","_",.rcp,"_",ssp,".csv"))
+
+ write.csv(gap,file=paste0("gap","_",.rcp,"_",ssp,".csv")) 
+
+  }
+}
 
 # dscc1=dscc
 # setorder(dscc1,ISO3,year)
